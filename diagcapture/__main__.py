@@ -49,6 +49,46 @@ def _sample_summary(document):
     }
 
 
+def _long_demo(folder):
+    """Real capture, replay, export and offline check of the long-response samples."""
+    sample = read_json_input(Path(__file__).resolve().parent.parent / 'samples' / 'long_response.json')
+    database = Path(folder) / 'long.sqlite3'
+    saved, summaries = {}, []
+    with ArchiveStore(database) as store:
+        catalog = sample['catalog']
+        CatalogRegistry(store.connection()).register_catalog(catalog['id'], catalog['dids'])
+        service = CaptureService(store, catalog['id'])
+        for case in sample['cases']:
+            identity = service.capture_isotp(case['run_id'], case['frames'],
+                                             sample['channels'], sample['timing'])
+            view = report(store, identity).to_document()
+            transfer = view['transfers'][0]
+            expected = case['expected']
+            if (transfer['body'] != expected['body'] or transfer['segments'] != expected['segments']
+                    or [row['status'] for row in view['operations']] != expected['statuses']
+                    or [row['completed_at_ms'] for row in view['operations']] != expected['completed_at_ms']
+                    or transfer['operation_id'] != expected['operation_id']):
+                raise ValueError('long demo differs from hand-worked sample: ' + case['run_id'])
+            if not verify(store, identity).to_document()['verified']:
+                raise ValueError('long demo replay failed: ' + case['run_id'])
+            export(store, identity, Path(folder) / case['run_id'])
+            saved[identity] = view
+    database.unlink()
+    for case in sample['cases']:
+        identity = 'report:' + case['run_id']
+        with ArchiveStore(Path(folder) / case['run_id']) as offline:
+            view = report(offline, identity).to_document()
+            if view != saved[identity] or not verify(offline, identity).to_document()['verified']:
+                raise ValueError('long demo offline delivery mismatch: ' + case['run_id'])
+            summaries.append({'run_id': case['run_id'],
+                              'statuses': [row['status'] for row in view['operations']],
+                              'completed_at_ms': [row['completed_at_ms'] for row in view['operations']],
+                              'transfers': view['transfers'],
+                              'interpretation': [row['interpretation'] for row in view['operations']]})
+    print('POINTWISE_LONG_RESPONSE ' + json.dumps(summaries, ensure_ascii=False, sort_keys=True))
+    return summaries
+
+
 def _demo():
     root = Path(__file__).resolve().parent.parent
     sample = read_json_input(root / 'samples' / 'workday.json')
@@ -76,6 +116,7 @@ def _demo():
         downstream_expected = {'verified': True, 'offline_equal': True}
         if downstream_actual != downstream_expected:
             raise ValueError('demo offline delivery mismatch')
+        _long_demo(folder)
         print('POINTWISE_SCENARIO ' + json.dumps({
             'case_id': 'v1', 'input': sample['frames'], 'expected': expected, 'actual': actual,
             'downstream_expected': downstream_expected, 'downstream_actual': downstream_actual,

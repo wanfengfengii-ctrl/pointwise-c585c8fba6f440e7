@@ -29,6 +29,8 @@ def report(store, report_id, ecu=None):
         'timing': bundle['evidence']['timing'], **result,
     }
     if ecu is not None:
-        for key in ('operations', 'messages', 'protocol_diagnostics', 'association_diagnostics'):
-            document[key] = [row for row in document[key] if row['ecu'] == ecu]
+        for key in ('operations', 'messages', 'protocol_diagnostics', 'association_diagnostics',
+                    'transfers'):
+            if key in document:
+                document[key] = [row for row in document[key] if row['ecu'] == ecu]
     return ReportView(document)

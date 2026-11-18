@@ -6,7 +6,7 @@ class CaptureIdentityConflict(ValueError):
     pass
 
 
-def canonical_capture_input(run_id, frames, channels, timing, catalog_id, catalog_digest):
+def canonical_capture_input(run_id, frames, channels, timing, catalog_id, catalog_digest, profile='v1'):
     if not isinstance(run_id, str) or not run_id.strip():
         raise ValueError('run_id must be a nonempty string')
     if not isinstance(catalog_id, str) or not catalog_id.strip():
@@ -17,7 +17,7 @@ def canonical_capture_input(run_id, frames, channels, timing, catalog_id, catalo
         int(catalog_digest, 16)
     except ValueError as exc:
         raise ValueError('invalid catalog digest') from exc
-    return {
+    document = {
         'run_id': run_id,
         'frames': [frame.to_document() for frame in frames],
         'channels': channels.to_document(),
@@ -25,6 +25,11 @@ def canonical_capture_input(run_id, frames, channels, timing, catalog_id, catalo
         'catalog_id': catalog_id,
         'catalog_digest': catalog_digest,
     }
+    # V1 evidence predates profiles; omitting the member keeps existing
+    # published identities and their input digests reproducible.
+    if profile != 'v1':
+        document['profile'] = profile
+    return document
 
 
 def capture_fingerprint(document):

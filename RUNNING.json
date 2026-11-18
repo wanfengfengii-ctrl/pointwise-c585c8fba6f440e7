@@ -10,6 +10,9 @@
     "offline_report": ["python3", "-B", "-m", "diagcapture", "--db", "workday-offline", "report", "--id", "report:workday"],
     "offline_verify": ["python3", "-B", "-m", "diagcapture", "--db", "workday-offline", "verify", "--id", "report:workday"],
     "tests": ["python3", "-B", "-m", "unittest", "discover", "-s", "tests", "-v"],
-    "demo": ["python3", "-B", "-m", "diagcapture", "demo"]
+    "demo": ["python3", "-B", "-m", "diagcapture", "demo"],
+    "long_scenario_materials": ["python3", "-B", "-m", "tools.long_scenario", "--check-materials"],
+    "long_scenario": ["python3", "-B", "-m", "tools.long_scenario"],
+    "verify_all": ["python3", "-B", "-m", "tools.verify_all"]
   }
 }

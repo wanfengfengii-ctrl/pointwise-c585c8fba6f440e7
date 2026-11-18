@@ -95,6 +95,18 @@ def _validate_document(document):
     manifest = {name + '_sha256': document_digest(document[name]) for name in ('evidence', 'catalog', 'result')}
     _require(_same(manifest, document['manifest']), 'bundle member digest mismatch')
     result = document['result']
+    if evidence.profile == 'isotp':
+        # The finite ISO-TP result carries assembled transfers.  Recompute the
+        # whole semantic result under the fixed profile; a stored result that
+        # merely looks plausible is not accepted.
+        from diagcapture.operations.replay import replay_capture
+        _require(isinstance(result, dict) and set(result) == {
+            'messages', 'protocol_diagnostics', 'operations', 'association_diagnostics', 'transfers'
+        }, 'incomplete replay result')
+        _require(all(isinstance(value, list) for value in result.values()), 'result members must be arrays')
+        expected = replay_capture(evidence, catalog).to_document()
+        _require(_same(result, expected), 'isotp result disagrees with raw replay')
+        return
     _require(isinstance(result, dict) and set(result) == {
         'messages', 'protocol_diagnostics', 'operations', 'association_diagnostics'
     }, 'incomplete replay result')

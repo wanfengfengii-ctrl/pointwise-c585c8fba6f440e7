@@ -23,7 +23,23 @@ class DidInterpretation:
                 'diagnostics': [diagnostic.to_document() for diagnostic in self.diagnostics]}
 
 
-def interpret_did(catalog, did, data, frame):
+def clip_segments(segments, start, end):
+    """Clip assembled-transfer provenance to one half-open body range."""
+    clipped = []
+    for segment in segments:
+        low, high = segment['body_range']
+        can_low, can_high = segment['can_range']
+        left, right = max(low, start), min(high, end)
+        if left < right:
+            clipped.append({
+                'frame': segment['frame'],
+                'body_range': [left, right],
+                'can_range': [can_low + (left - low), can_high - (high - right)],
+            })
+    return clipped
+
+
+def interpret_did(catalog, did, data, frame, segments=None):
     layout = catalog.find(did)
     if layout is None:
         return DidInterpretation((), (InterpretationDiagnostic('unknown_did', did, 'DID is absent from bound catalog', frame),))
@@ -36,8 +52,11 @@ def interpret_did(catalog, did, data, frame):
             raw_bytes = data[field.offset:field.offset + field.width]
             raw_integer = read_integer(raw_bytes, field.byteorder, field.signed)
             value = apply_calibration(raw_integer, field.scale, field.bias)
+            start = 3 + field.offset
+            clipped = None if segments is None else tuple(
+                clip_segments(segments, start, start + field.width))
             values.append(ExactFieldValue(field.name, raw_bytes, raw_integer, value, field.unit,
-                                          frame, 3 + field.offset, 3 + field.offset + field.width))
+                                          frame, start, start + field.width, clipped))
     except (ValueError, TypeError, OverflowError) as exc:
         return DidInterpretation((), (InterpretationDiagnostic('field_interpretation', did, str(exc), frame),))
     return DidInterpretation(tuple(values), ())

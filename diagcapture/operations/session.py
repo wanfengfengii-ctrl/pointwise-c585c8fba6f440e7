@@ -14,9 +14,10 @@ class DiagnosticOperation:
     completed_at_ms: object = None
     responses: list = field(default_factory=list)
     deadline_history: list = field(default_factory=list)
+    transfer_ids: list = field(default_factory=list)
 
-    def to_document(self):
-        return {
+    def to_document(self, with_transfers=False):
+        document = {
             'id': self.operation_id, 'ecu': self.request.ecu, 'did': self.request.did,
             'request': self.request.message.to_document(), 'deadline_ms': self.deadline_ms,
             'deadline_history': deepcopy(self.deadline_history), 'status': self.status,
@@ -24,6 +25,9 @@ class DiagnosticOperation:
             'responses': [response.to_document() for response in self.responses],
             'interpretation': {'fields': [], 'diagnostics': []},
         }
+        if with_transfers:
+            document['transfer_ids'] = list(self.transfer_ids)
+        return document
 
 
 @dataclass(frozen=True)
@@ -44,9 +48,10 @@ class AssociationDiagnostic:
 
 
 class OperationSession:
-    def __init__(self, run_id, timing):
+    def __init__(self, run_id, timing, profile='v1'):
         self.run_id = run_id
         self.timing = validate_timing(timing)
+        self.profile = profile
         self.active = {}
         self.operations = []
         self.diagnostics = []
@@ -111,6 +116,21 @@ class OperationSession:
             current.completed_at_ms = message.t_ms
             del self.active[message.ecu]
 
+    def complete_long(self, operation, message):
+        """Apply an assembled long positive response to its original owner.
+
+        The binding was fixed at the first frame.  If the operation already
+        left the active set, the message stays evidence and never revives it.
+        """
+        if self.active.get(operation.request.ecu) is not operation:
+            return
+        body = message.body
+        response = classify_response(message)
+        operation.responses.append(response)
+        operation.status = 'success'
+        operation.completed_at_ms = message.t_ms
+        del self.active[operation.request.ecu]
+
     def finish(self):
         if self.closed:
             return
@@ -121,6 +141,7 @@ class OperationSession:
 
     def snapshot(self):
         return {
-            'operations': [operation.to_document() for operation in self.operations],
+            'operations': [operation.to_document(self.profile == 'isotp')
+                           for operation in self.operations],
             'association_diagnostics': [diagnostic.to_document() for diagnostic in self.diagnostics],
         }

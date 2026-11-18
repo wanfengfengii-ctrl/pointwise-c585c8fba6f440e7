@@ -70,3 +70,65 @@ A fixed bundle contains its catalog snapshot. Later registrations cannot change 
 Export produces `bundle.json` and `manifest.json` in a self-contained directory. It uses a destination lock for cooperating exporters and prepares files in a dedicated temporary sibling directory before rename. Existing destinations are rejected, including empty directories and symbolic links. Preparation errors clean this invocation's temporary directory and lock. Export is an application-level publication operation; the program does not coordinate with unrelated processes manually renaming destination paths.
 
 The four regression modules cover daily import, computation, fixed publication and offline delivery, including a real SQLite abort trigger for rollback, modified evidence with forged local digests, deleted sources, incompatible versions, catalog drift, failed CLI invocations and export cleanup. `tools/can_fixture.py` only encodes independent CAN bytes and virtual integer times; it does not implement message assembly or operation association.
+
+## Long responses (finite ISO-TP)
+
+`CaptureService.capture_isotp(run_id, frames, channels, timing)` is the second fixed profile.
+It uses the same constructor, argument shapes, exception types and report identity namespace as
+`capture`; `capture` and `decode_single_frame` keep their V1 behaviour. `CaptureService.capture`
+cannot be used to re-import a run captured through `capture_isotp` (and the reverse) because the
+capture profile is part of the input identity; such reuse raises `CaptureIdentityConflict`.
+
+The new entry accepts the V1 single frames and finite classic ISO-TP long responses:
+
+- A response first frame must hold exactly eight CAN bytes; the declared length is 12 bits, 8 to
+  4095, and the following six bytes are the body prefix.
+- A legal first frame always starts a transfer, replacing any in-flight transfer on the same ECU
+  (`replaced`); the old transfer keeps its own owner.
+- While waiting for flow control, a request-side frame `30|status block stmin` with zero STmin is
+  accepted: CTS starts the consecutive-frame window with that block size (zero means unbounded),
+  WAIT refreshes N_Bs without a limit, and OVERFLOW or a malformed frame fails the transfer.
+- Consecutive frames use a 1-based mod-16 sequence; every non-final one must carry exactly seven
+  payload bytes, the final one may be short and its surplus is padding. A block that runs out after
+  a non-final frame waits for a new flow-control frame under N_Bs; a final frame never waits.
+- Deadlines settle before a frame only when strictly earlier than its timestamp, and the end of
+  input settles them at their logical time without sleeping. Timeouts are `N_Bs_timeout` /
+  `N_Cr_timeout` with `end_frame` null.
+
+Ownership is fixed when the first frame is processed: the first three body bytes must be
+`62 DID-high DID-low` and a matching unfinished operation must exist. The reason `response_format`,
+`no_active_operation` or `did_mismatch` is recorded when no binding happened. A first frame never
+extends P2/P2star; a transfer that completes after its operation timed out stays in that
+operation's `transfer_ids` without reviving it, and a late body never attaches to a newer query.
+Complete three-byte `7F 22 78` single frames still extend the operation as in V1.
+
+The result adds `transfers` (sorted by first-frame position) with identity, ECU, start/end frame
+and time, declared length, status (`complete`/`failed`), reason, bound operation and binding
+reason, consumed frame list, body and body provenance `segments`. A failed transfer has
+`body: null`; consumed prefixes remain only as evidence. `operations[].transfer_ids` lists every
+transfer ever bound to that operation. Complete long messages join `messages` with
+`transfer_id`/`segments` and are ordered by completion position together with single frames. A
+field that crosses frames reports `source = {body_range, segments}` with the per-frame provenance
+clipped to the field; single-frame fields keep the V1 source shape. ECU filtering also filters
+`transfers`.
+
+The profile takes part in the fixed input identity and bundle, so `verify`, reopening, ECU
+filtering and offline export re-derive transfers, ownership and fields from the saved raw frames
+under the same profile. A V1 report is never reinterpreted by the long-response rules. Invalid
+raw structure or configuration is rejected before publication and cannot disturb an existing
+report.
+
+`python3 -B -m tools.long_scenario --check-materials` checks only the sample material.
+`python3 -B -m tools.long_scenario` performs the real capture, reopen, verify and offline delivery
+for the supplied timely/late cases. `python3 -B -m tools.verify_all` runs all regressions and that
+scenario, and is the manifest's verify entry.
+
+### Transfer/operation state handoff
+
+| Event | Transfer | Operation |
+| --- | --- | --- |
+| Matching first frame | created, waits FC (N_Bs) | unchanged; `transfer_ids` records it |
+| CTS / WAIT | waits CF (N_Cr) / waits FC (N_Bs) | unchanged |
+| Final consecutive frame | `complete`, joins `messages` | `success` at the completion time if still active |
+| Timeout, malformed, sequence, overflow, replaced, interrupted | `failed` with a reason | unchanged, except complete 78 single frames which extend it |
+| Operation times out or ends first | transfer continues to its own conclusion | terminal state fixed; later body stays evidence only |

@@ -28,11 +28,18 @@ class ExactFieldValue:
     frame: int
     body_start: int
     body_end: int
+    segments: tuple = None
 
     def to_document(self):
+        if self.segments is None:
+            source = {'frame': self.frame, 'body_range': [self.body_start, self.body_end],
+                      'can_range': [self.body_start + 1, self.body_end + 1]}
+        else:
+            # A field spanning consecutive frames has no single honest CAN
+            # interval, so it carries the clipped per-frame provenance instead.
+            source = {'body_range': [self.body_start, self.body_end],
+                      'segments': [dict(segment) for segment in self.segments]}
         return {
             'name': self.name, 'raw_bytes': list(self.raw_bytes), 'raw_integer': self.raw_integer,
-            'value': fraction_to_record(self.value), 'unit': self.unit,
-            'source': {'frame': self.frame, 'body_range': [self.body_start, self.body_end],
-                       'can_range': [self.body_start + 1, self.body_end + 1]},
+            'value': fraction_to_record(self.value), 'unit': self.unit, 'source': source,
         }
