@@ -1,0 +1,20 @@
+{
+  "run_id": "workday",
+  "channels": [{"ecu": "A", "request_id": 1792, "response_id": 1800}],
+  "timing": {"P2": 10, "P2star": 50, "N_Bs": 20, "N_Cr": 20},
+  "frames": [
+    {"t_ms": 0, "can_id": 1792, "data": [3, 34, 18, 52]},
+    {"t_ms": 8, "can_id": 1800, "data": [7, 98, 18, 52, 255, 156, 57, 48]}
+  ],
+  "catalog": {
+    "id": "lab-v1",
+    "dids": [{
+      "did": 4660,
+      "length": 4,
+      "fields": [
+        {"name": "temperature", "offset": 0, "width": 2, "byteorder": "big", "signed": true, "scale": [1, 10], "bias": [0, 1], "unit": "degC"},
+        {"name": "voltage", "offset": 2, "width": 2, "byteorder": "little", "signed": false, "scale": [1, 1000], "bias": [0, 1], "unit": "V"}
+      ]
+    }]
+  }
+}

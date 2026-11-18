@@ -1,0 +1,9 @@
+{
+  "report_id": "report:workday",
+  "operation_id": "workday:request:0",
+  "status": "success",
+  "temperature": {"numerator": -10, "denominator": 1},
+  "voltage": {"numerator": 2469, "denominator": 200},
+  "response_frame": 1,
+  "field_can_ranges": [[4, 6], [6, 8]]
+}

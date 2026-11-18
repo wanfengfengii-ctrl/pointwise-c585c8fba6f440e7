@@ -1,0 +1,15 @@
+{
+  "python": "3.11",
+  "commands": {
+    "initialize": ["python3", "-B", "-m", "diagcapture", "--db", "workday.sqlite3", "init"],
+    "register_catalog": ["python3", "-B", "-m", "diagcapture", "--db", "workday.sqlite3", "catalog", "--input", "samples/workday.json"],
+    "capture": ["python3", "-B", "-m", "diagcapture", "--db", "workday.sqlite3", "capture", "--catalog", "lab-v1", "--input", "samples/workday.json"],
+    "report": ["python3", "-B", "-m", "diagcapture", "--db", "workday.sqlite3", "report", "--id", "report:workday"],
+    "verify": ["python3", "-B", "-m", "diagcapture", "--db", "workday.sqlite3", "verify", "--id", "report:workday"],
+    "export": ["python3", "-B", "-m", "diagcapture", "--db", "workday.sqlite3", "export", "--id", "report:workday", "--target", "workday-offline"],
+    "offline_report": ["python3", "-B", "-m", "diagcapture", "--db", "workday-offline", "report", "--id", "report:workday"],
+    "offline_verify": ["python3", "-B", "-m", "diagcapture", "--db", "workday-offline", "verify", "--id", "report:workday"],
+    "tests": ["python3", "-B", "-m", "unittest", "discover", "-s", "tests", "-v"],
+    "demo": ["python3", "-B", "-m", "diagcapture", "demo"]
+  }
+}
